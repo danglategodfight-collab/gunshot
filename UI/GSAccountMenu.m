@@ -1,5 +1,3 @@
-
-
 #import "../Shared/GSPhotosCompatibility.h"
 #import "../Shared/GSLocalization.h"
 #import "GSAccountMenu.h"
@@ -18,7 +16,6 @@ void GSMarkHit(const char *m);
 #else
 #define GSMARK(m) do{}while(0)
 #endif
-
 
 // Private declarations are version/ABI checked before any hook is installed.
 @interface NSObject (GSMenuItemConstruction)
@@ -120,3 +117,4 @@ void GSInstallAccountMenu(void){
  Method action=class_getInstanceMethod(handler,NSSelectorFromString(@"performCustomActionType:indexPath:accountMenuViewController:"));
  if(action&&!strcmp(method_getTypeEncoding(action),"v40@0:8q16@24@32"))GSUIAction=(void *)method_setImplementation(action,(IMP)GSMenuUIAction);
  installed=YES;GSInstallNativeAccount();
+}
