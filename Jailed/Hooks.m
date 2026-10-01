@@ -46,17 +46,22 @@ static void GSUncaughtExceptionHandler(NSException *exception){
 }
 static struct sigaction GSOldSignalHandlers[4];
 static const int GSSignals[]={SIGABRT,SIGSEGV,SIGBUS,SIGILL};
+static volatile sig_atomic_t GSSignalDepth=0;
 static void GSSignalHandler(int sig){
- void *frames[32];int n=backtrace(frames,32);
- char **syms=backtrace_symbols(frames,n);
- NSMutableString *report=[NSMutableString stringWithFormat:@"Gunshot signal %d\n",sig];
- for(int i=0;i<n&&i<16;i++)[report appendFormat:@"%s\n",syms?syms[i]:"?"];
- free(syms);
- GSCrashReportToPasteboard(report);
+ if(!GSSignalDepth){
+  GSSignalDepth=1;
+  void *frames[32];int n=backtrace(frames,32);
+  char **syms=backtrace_symbols(frames,n);
+  NSMutableString *report=[NSMutableString stringWithFormat:@"Gunshot signal %d\n",sig];
+  for(int i=0;i<n&&i<16;i++)[report appendFormat:@"%s\n",syms?syms[i]:"?"];
+  free(syms);
+  GSCrashReportToPasteboard(report);
+  GSSignalDepth=0;
+ }
  int idx=-1;for(int i=0;i<4;i++)if(GSSignals[i]==sig)idx=i;
  if(idx>=0){
   struct sigaction *old=&GSOldSignalHandlers[idx];
-  if(old->sa_handler!=SIG_DFL&&old->sa_handler!=SIG_IGN){
+  if(old->sa_handler!=SIG_DFL&&old->sa_handler!=SIG_IGN&&old->sa_handler!=&GSSignalHandler){
    if(old->sa_flags&SA_SIGINFO)((void(*)(int,siginfo_t*,void*))old->sa_sigaction)(sig,NULL,NULL);
    else old->sa_handler(sig);
    return;
@@ -71,6 +76,10 @@ void GSReinstallCrashCatcher(void){
   @try{
    NSSetUncaughtExceptionHandler(&GSUncaughtExceptionHandler);
    for(int i=0;i<4;i++){
+    struct sigaction cur;memset(&cur,0,sizeof(cur));
+    // Idempotent: never overwrite the saved previous handler with ourselves,
+    // or the signal handler would chain into itself forever.
+    if(sigaction(GSSignals[i],NULL,&cur)==0&&cur.sa_handler==&GSSignalHandler)continue;
     struct sigaction sa;memset(&sa,0,sizeof(sa));
     sa.sa_handler=&GSSignalHandler;sigemptyset(&sa.sa_mask);sa.sa_flags=0;
     sigaction(GSSignals[i],&sa,&GSOldSignalHandlers[i]);
