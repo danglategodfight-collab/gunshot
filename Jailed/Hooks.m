@@ -49,7 +49,6 @@ static struct sigaction GSOldSignalHandlers[4];
 static const int GSSignals[]={SIGABRT,SIGSEGV,SIGBUS,SIGILL};
 static volatile sig_atomic_t GSSignalDepth=0;
 static volatile sig_atomic_t GSExceptionReportDone=0;
-
 static void GSSignalHandler(int sig){
  if(!GSSignalDepth){
   GSSignalDepth=1;
