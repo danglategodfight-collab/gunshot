@@ -6,6 +6,10 @@
 #import "GSUnlimitedStorage.h"
 #import <objc/runtime.h>
 #import <objc/message.h>
+#ifdef GS_JAILED
+// Diagnostic: re-arm the crash catcher right before the menu builds.
+void GSReinstallCrashCatcher(void);
+#endif
 
 // Private declarations are version/ABI checked before any hook is installed.
 @interface NSObject (GSMenuItemConstruction)
@@ -23,9 +27,18 @@ static id (*GSItem)(id,SEL,id,NSIndexPath *);
 static void (*GSAction)(id,SEL,id,NSIndexPath *);
 static NSUInteger GSSection(id object,id controller){return GSSections(object,NSSelectorFromString(@"numberOfCustomSectionsForAccountMenuViewController:"),controller);}
 static NSUInteger GSMenuSections(id object,SEL selector,id controller){return GSSections(object,selector,controller)+1;}
-static NSUInteger GSMenuItems(id object,SEL selector,id controller,NSUInteger section){return section==GSSection(object,controller)?1:GSItems(object,selector,controller,section);}
+static NSUInteger GSMenuItems(id object,SEL selector,id controller,NSUInteger section){
+#ifdef GS_JAILED
+ GSReinstallCrashCatcher();
+#endif
+ return section==GSSection(object,controller)?1:GSItems(object,selector,controller,section);}
 static BOOL GSOwnItem(id object,id controller,NSIndexPath *path){return path.section==GSSection(object,controller)&&path.row==0;}
+
+
 static id GSMenuItem(id object,SEL selector,id controller,NSIndexPath *path){
+#ifdef GS_JAILED
+ GSReinstallCrashCatcher();
+#endif
  if(!GSOwnItem(object,controller,path))return GSItem(object,selector,controller,path);
  id item;
  if(GSMenuItemTyped){
