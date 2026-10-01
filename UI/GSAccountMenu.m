@@ -40,7 +40,7 @@ static NSUInteger GSMenuItems(id object,SEL selector,id controller,NSUInteger se
 #endif
  // DIAG v6: 2 items in our section — tests whether Google's accessory injector does objectAtIndex:1 on a single-item section.
  return section==GSSection(object,controller)?2:GSItems(object,selector,controller,section);}
-static BOOL GSOwnItem(id object,id controller,NSIndexPath *path){return path.section==GSSection(object,controller)&&path.row==0;}
+static BOOL GSOwnItem(id object,id controller,NSIndexPath *path){return path.section==GSSection(object,controller)&&path.row<2;}
 
 
 static id GSMenuItem(id object,SEL selector,id controller,NSIndexPath *path){
