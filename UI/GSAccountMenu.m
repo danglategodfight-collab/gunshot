@@ -31,16 +31,27 @@ static NSUInteger (*GSSections)(id,SEL,id);
 static NSUInteger (*GSItems)(id,SEL,id,NSUInteger);
 static id (*GSItem)(id,SEL,id,NSIndexPath *);
 static void (*GSAction)(id,SEL,id,NSIndexPath *);
+
 static NSUInteger GSSection(id object,id controller){return GSSections(object,NSSelectorFromString(@"numberOfCustomSectionsForAccountMenuViewController:"),controller);}
-static NSUInteger GSMenuSections(id object,SEL selector,id controller){GSMARK("menu:sections");return GSSections(object,selector,controller)+1;}
+static NSUInteger GSMenuSections(id object,SEL selector,id controller){GSMARK("menu:sections");
+ // DIAG v8: no new section — append our row to the last native section instead.
+ NSUInteger n=GSSections(object,selector,controller);return n==0?1:n;}
 static NSUInteger GSMenuItems(id object,SEL selector,id controller,NSUInteger section){
  GSMARK("menu:items");
 #ifdef GS_JAILED
  GSReinstallCrashCatcher();
 #endif
- // DIAG v6: 2 items in our section — tests whether Google's accessory injector does objectAtIndex:1 on a single-item section.
- return section==GSSection(object,controller)?2:GSItems(object,selector,controller,section);}
-static BOOL GSOwnItem(id object,id controller,NSIndexPath *path){return path.section==GSSection(object,controller)&&path.row<2;}
+ // DIAG v8: our row is appended to the last native section; own section only when n==0.
+ NSUInteger n8=GSSections(object,NSSelectorFromString(@"numberOfCustomSectionsForAccountMenuViewController:"),controller);
+ if(n8==0)return section==0?2:GSItems(object,selector,controller,section);
+ if(section==n8-1)return GSItems(object,selector,controller,section)+1;
+ return GSItems(object,selector,controller,section);}
+static BOOL GSOwnItem(id object,id controller,NSIndexPath *path){
+ NSUInteger n=GSSection(object,controller);
+ if(n==0)return path.section==0&&path.row<2;
+ if(path.section!=n-1)return NO;
+ NSUInteger orig=GSItems(object,NSSelectorFromString(@"accountMenuViewController:numberOfCustomItemsInSectionAtIndex:"),controller,n-1);
+ return path.row==orig;}
 
 
 static id GSMenuItem(id object,SEL selector,id controller,NSIndexPath *path){
