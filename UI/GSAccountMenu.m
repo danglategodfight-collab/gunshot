@@ -22,9 +22,22 @@ static NSUInteger (*GSItems)(id,SEL,id,NSUInteger);
 static id (*GSItem)(id,SEL,id,NSIndexPath *);
 static void (*GSAction)(id,SEL,id,NSIndexPath *);
 static NSUInteger GSSection(id object,id controller){return GSSections(object,NSSelectorFromString(@"numberOfCustomSectionsForAccountMenuViewController:"),controller);}
-static NSUInteger GSMenuSections(id object,SEL selector,id controller){return GSSections(object,selector,controller)+1;}
-static NSUInteger GSMenuItems(id object,SEL selector,id controller,NSUInteger section){return section==GSSection(object,controller)?1:GSItems(object,selector,controller,section);}
-static BOOL GSOwnItem(id object,id controller,NSIndexPath *path){return path.section==GSSection(object,controller)&&path.row==0;}
+static NSUInteger GSMenuSections(id object,SEL selector,id controller){
+// Our settings row is appended to the last native section instead of adding a
+// new section: Google's accessory-view service reads section data through a
+// path that bypasses these hooks and crashes on an unfamiliar section index.
+NSUInteger n=GSSections(object,selector,controller);return n==0?1:n;}
+static NSUInteger GSMenuItems(id object,SEL selector,id controller,NSUInteger section){
+NSUInteger n=GSSections(object,NSSelectorFromString(@"numberOfCustomSectionsForAccountMenuViewController:"),controller);
+if(n==0)return section==0?1:GSItems(object,selector,controller,section);
+if(section==n-1)return GSItems(object,selector,controller,section)+1;return GSItems(object,selector,controller,section);}
+return GSItems(object,selector,controller,section);}
+static BOOL GSOwnItem(id object,id controller,NSIndexPath *path){
+NSUInteger n=GSSection(object,controller);
+if(n==0)return path.section==0&&path.row==0;
+if(path.section!=n-1)return NO;
+NSUInteger orig=GSItems(object,NSSelectorFromString(@"accountMenuViewController:numberOfCustomItemsInSectionAtIndex:"),controller,n-1);
+return path.row==orig;}
 static id GSMenuItem(id object,SEL selector,id controller,NSIndexPath *path){
  if(!GSOwnItem(object,controller,path))return GSItem(object,selector,controller,path);
  id item;
