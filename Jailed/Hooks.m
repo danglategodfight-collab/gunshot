@@ -10,6 +10,8 @@
 #import "SideloadIdentity.h"
 
 
+
+
 // Independent Objective-C hooks: no Substrate / ElleKit dependency for IPA injection.
 static id (*GSOriginalActivityInit)(id, SEL, NSArray *, NSArray *);
 static id GSActivityInit(id object, SEL selector, NSArray *items, NSArray *activities) {
@@ -29,10 +31,12 @@ static id GSActivityInit(id object, SEL selector, NSArray *items, NSArray *activ
 // (SIGABRT/SIGSEGV/SIGBUS/SIGILL, chaining to any previous handler), re-arms
 // them on a delay and right before the account menu builds, and copies the
 // report to the pasteboard from any thread.
+// Hang-safe: never hop to the main thread here. If the main thread is the thing
+// that is blocked (hang) or dying (crash on another thread), dispatch_sync would
+// deadlock and no report would ever reach the pasteboard.
 static void GSCrashReportToPasteboard(NSString *report){
  NSLog(@"%@",report);
- if(NSThread.isMainThread){UIPasteboard.generalPasteboard.string=report;return;}
- dispatch_sync(dispatch_get_main_queue(),^{UIPasteboard.generalPasteboard.string=report;});
+ @try{UIPasteboard.generalPasteboard.string=report;}@catch(id ignored){}
 }
 static void GSUncaughtExceptionHandler(NSException *exception){
  @autoreleasepool{
@@ -49,6 +53,38 @@ static struct sigaction GSOldSignalHandlers[4];
 static const int GSSignals[]={SIGABRT,SIGSEGV,SIGBUS,SIGILL};
 static volatile sig_atomic_t GSSignalDepth=0;
 static volatile sig_atomic_t GSExceptionReportDone=0;
+// Hang watchdog (diagnose v5): a background thread watches the main-thread
+// heartbeat. If the main thread stops responding for >12s (frozen UI), it writes
+// a hang report directly — never hopping to the main thread — with the recent
+// marker trail showing where the main thread was last seen.
+#define GSMarkN 16
+static const char *GSMarks[GSMarkN];
+static volatile int GSMarkIdx=0;
+void GSMarkHit(const char *m){int i=__sync_fetch_and_add(&GSMarkIdx,1);GSMarks[i%GSMarkN]=m;}
+static volatile double GSMainAliveAt=0;
+static volatile int GSHangReported=0;
+static void GSWDTick(void){
+ double now=[[NSDate date]timeIntervalSince1970];
+ double alive=GSMainAliveAt;
+ if(alive>0&&now-alive>12&&!GSHangReported){
+  GSHangReported=1;
+  NSMutableString *r=[NSMutableString stringWithFormat:@"Gunshot HANG: main thread blocked >12s\nmarkers (oldest..newest):\n"];
+  int idx=GSMarkIdx;
+  for(int k=0;k<GSMarkN;k++){const char *m=GSMarks[(idx+k)%GSMarkN];if(m)[r appendFormat:@"%s\n",m];}
+  GSCrashReportToPasteboard(r);
+ }
+ if(alive>0&&now-alive<=12)GSHangReported=0;
+}
+static void GSWatchdog(void){
+ [NSThread sleepForTimeInterval:20];
+ for(;;){
+  @autoreleasepool{
+   dispatch_async(dispatch_get_main_queue(),^{GSMainAliveAt=[[NSDate date]timeIntervalSince1970];});
+   [NSThread sleepForTimeInterval:2];
+   GSWDTick();
+  }
+ }
+}
 static void GSSignalHandler(int sig){
  if(!GSSignalDepth){
   GSSignalDepth=1;
@@ -59,10 +95,9 @@ static void GSSignalHandler(int sig){
   free(syms);
   if(GSExceptionReportDone){
    // An uncaught-exception report was already captured for this crash: keep it and append the signal info instead of overwriting.
-   __block NSString *old=nil;
-   void (^grab)(void)=^{@try{old=[UIPasteboard generalPasteboard].string;}@catch(id ignored){}};
-   if([NSThread isMainThread])grab();else dispatch_sync(dispatch_get_main_queue(),grab);
-   report=[NSMutableString stringWithFormat:@"%@"\n--- signal %d after exception ---\n%@",old?old:@"",sig,report];
+   NSString *old=nil;
+   @try{old=[UIPasteboard generalPasteboard].string;}@catch(id ignored){}
+   report=[NSMutableString stringWithFormat:@"%@\n--- signal %d after exception ---\n%@",old?old:@"",sig,report];
   }
   GSCrashReportToPasteboard(report);
   GSSignalDepth=0;
@@ -99,6 +134,8 @@ void GSReinstallCrashCatcher(void){
 __attribute__((constructor)) static void GSLoadJailed(void) {
  @autoreleasepool {
  GSReinstallCrashCatcher();
+ // Hang watchdog: background thread, never touches the main thread except for heartbeats.
+ dispatch_async(dispatch_get_global_queue(QOS_CLASS_BACKGROUND,0),^{GSWatchdog();});
  // The host app's own crash reporter may install its handlers after ours;
  // re-arm late so we stay the last handler installed.
  dispatch_after(dispatch_time(DISPATCH_TIME_NOW,(int64_t)(5*NSEC_PER_SEC)),dispatch_get_main_queue(),^{GSReinstallCrashCatcher();});
