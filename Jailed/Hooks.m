@@ -19,7 +19,7 @@ static id GSActivityInit(id object, SEL selector, NSArray *items, NSArray *activ
  GSUploadActivity *upload=[GSUploadActivity new];
  if([upload canPerformWithActivityItems:items])[all addObject:upload];
  return GSOriginalActivityInit(object,selector,items,all);
-
+}
 #import <execinfo.h>
 #import <signal.h>
 #import <string.h>
