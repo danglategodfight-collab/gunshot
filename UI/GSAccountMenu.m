@@ -10,6 +10,12 @@
 // Diagnostic: re-arm the crash catcher right before the menu builds.
 void GSReinstallCrashCatcher(void);
 #endif
+#ifdef GS_JAILED
+void GSMarkHit(const char *m);
+#define GSMARK(m) GSMarkHit(m)
+#else
+#define GSMARK(m) do{}while(0)
+#endif
 
 // Private declarations are version/ABI checked before any hook is installed.
 @interface NSObject (GSMenuItemConstruction)
@@ -26,8 +32,9 @@ static NSUInteger (*GSItems)(id,SEL,id,NSUInteger);
 static id (*GSItem)(id,SEL,id,NSIndexPath *);
 static void (*GSAction)(id,SEL,id,NSIndexPath *);
 static NSUInteger GSSection(id object,id controller){return GSSections(object,NSSelectorFromString(@"numberOfCustomSectionsForAccountMenuViewController:"),controller);}
-static NSUInteger GSMenuSections(id object,SEL selector,id controller){return GSSections(object,selector,controller)+1;}
+static NSUInteger GSMenuSections(id object,SEL selector,id controller){GSMARK("menu:sections");return GSSections(object,selector,controller)+1;}
 static NSUInteger GSMenuItems(id object,SEL selector,id controller,NSUInteger section){
+ GSMARK("menu:items");
 #ifdef GS_JAILED
  GSReinstallCrashCatcher();
 #endif
@@ -36,6 +43,7 @@ static BOOL GSOwnItem(id object,id controller,NSIndexPath *path){return path.sec
 
 
 static id GSMenuItem(id object,SEL selector,id controller,NSIndexPath *path){
+ GSMARK("menu:item");
 #ifdef GS_JAILED
  GSReinstallCrashCatcher();
 #endif
@@ -51,7 +59,7 @@ static id GSMenuItem(id object,SEL selector,id controller,NSIndexPath *path){
  objc_setAssociatedObject(item,&GSMenuMarker,@YES,OBJC_ASSOCIATION_RETAIN_NONATOMIC);
  return item;
 }
-static void GSMenuAction(id object,SEL selector,id controller,NSIndexPath *path){
+static void GSMenuAction(id object,SEL selector,id controller,NSIndexPath *path){GSMARK("menu:action");
  if(!GSOwnItem(object,controller,path)){GSAction(object,selector,controller,path);return;}
  GSPresentSettings([controller isKindOfClass:UIViewController.class]?controller:nil);
 }
@@ -60,7 +68,7 @@ static id GSMenuGet(id object,NSString *name){
  if(!method||strcmp(method_getTypeEncoding(method),"@16@0:8"))return nil;
  return ((id(*)(id,SEL))objc_msgSend)(object,selector);
 }
-static void GSMenuUIAction(id object,SEL selector,NSInteger type,id path,id controller){
+static void GSMenuUIAction(id object,SEL selector,NSInteger type,id path,id controller){GSMARK("menu:uiaction");
  // The native implementation dismisses the menu BEFORE invoking its delegate.
  // Identify our item through this session's data source, not a global row number.
  id item=nil;
