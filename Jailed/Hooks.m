@@ -9,6 +9,7 @@
 #import "SideloadKeychain.h"
 #import "SideloadIdentity.h"
 
+
 // Independent Objective-C hooks: no Substrate / ElleKit dependency for IPA injection.
 static id (*GSOriginalActivityInit)(id, SEL, NSArray *, NSArray *);
 static id GSActivityInit(id object, SEL selector, NSArray *items, NSArray *activities) {
@@ -17,8 +18,23 @@ static id GSActivityInit(id object, SEL selector, NSArray *items, NSArray *activ
  if([upload canPerformWithActivityItems:items])[all addObject:upload];
  return GSOriginalActivityInit(object,selector,items,all);
 }
+// Diagnostic for the 6.85 account-menu abort: copy the uncaught NSException's
+// name/reason/stack to the pasteboard (and NSLog) before the process aborts,
+// so the reason survives even when iOS writes no crash log.
+static void GSUncaughtExceptionHandler(NSException *exception){
+ @autoreleasepool{
+  @try{
+   NSMutableString *report=[NSMutableString stringWithFormat:@"Gunshot uncaught %@\nreason: %@\n",exception.name,exception.reason];
+   NSArray *stack=exception.callStackSymbols;NSUInteger n=stack.count<16?stack.count:16;
+   for(NSUInteger i=0;i<n;i++)[report appendFormat:@"%@\n",stack[i]];
+   NSLog(@"%@",report);
+   if(NSThread.isMainThread)UIPasteboard.generalPasteboard.string=report;
+  }@catch(id ignored){}
+ }
+}
 __attribute__((constructor)) static void GSLoadJailed(void) {
  @autoreleasepool {
+ NSSetUncaughtExceptionHandler(&GSUncaughtExceptionHandler);
  GSInstallSideloadIdentity();
  GSInstallSideloadKeychain(); // SSO reads its Keychain mode during initialization.
  // LC's guest bundle is resolved lazily on the main queue, after guest setup.
