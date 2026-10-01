@@ -19,7 +19,7 @@ static id GSActivityInit(id object, SEL selector, NSArray *items, NSArray *activ
  GSUploadActivity *upload=[GSUploadActivity new];
  if([upload canPerformWithActivityItems:items])[all addObject:upload];
  return GSOriginalActivityInit(object,selector,items,all);
-}
+
 #import <execinfo.h>
 #import <signal.h>
 #import <string.h>
@@ -38,6 +38,9 @@ static void GSCrashReportToPasteboard(NSString *report){
  NSLog(@"%@",report);
  @try{UIPasteboard.generalPasteboard.string=report;}@catch(id ignored){}
 }
+static volatile sig_atomic_t GSSignalDepth=0;
+static volatile sig_atomic_t GSExceptionReportDone=0;
+
 static void GSUncaughtExceptionHandler(NSException *exception){
  @autoreleasepool{
   @try{
@@ -51,8 +54,6 @@ static void GSUncaughtExceptionHandler(NSException *exception){
 }
 static struct sigaction GSOldSignalHandlers[4];
 static const int GSSignals[]={SIGABRT,SIGSEGV,SIGBUS,SIGILL};
-static volatile sig_atomic_t GSSignalDepth=0;
-static volatile sig_atomic_t GSExceptionReportDone=0;
 // Hang watchdog (diagnose v5): a background thread watches the main-thread
 // heartbeat. If the main thread stops responding for >12s (frozen UI), it writes
 // a hang report directly — never hopping to the main thread — with the recent
