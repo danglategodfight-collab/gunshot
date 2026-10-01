@@ -41,12 +41,15 @@ static void GSUncaughtExceptionHandler(NSException *exception){
    NSArray *stack=exception.callStackSymbols;NSUInteger n=stack.count<16?stack.count:16;
    for(NSUInteger i=0;i<n;i++)[report appendFormat:@"%@\n",stack[i]];
    GSCrashReportToPasteboard(report);
+   GSExceptionReportDone=1;
   }@catch(id ignored){}
  }
 }
 static struct sigaction GSOldSignalHandlers[4];
 static const int GSSignals[]={SIGABRT,SIGSEGV,SIGBUS,SIGILL};
 static volatile sig_atomic_t GSSignalDepth=0;
+static volatile sig_atomic_t GSExceptionReportDone=0;
+
 static void GSSignalHandler(int sig){
  if(!GSSignalDepth){
   GSSignalDepth=1;
@@ -55,6 +58,13 @@ static void GSSignalHandler(int sig){
   NSMutableString *report=[NSMutableString stringWithFormat:@"Gunshot signal %d\n",sig];
   for(int i=0;i<n&&i<16;i++)[report appendFormat:@"%s\n",syms?syms[i]:"?"];
   free(syms);
+  if(GSExceptionReportDone){
+   // An uncaught-exception report was already captured for this crash: keep it and append the signal info instead of overwriting.
+   __block NSString *old=nil;
+   void (^grab)(void)=^{@try{old=[UIPasteboard generalPasteboard].string;}@catch(id ignored){}};
+   if([NSThread isMainThread])grab();else dispatch_sync(dispatch_get_main_queue(),grab);
+   report=[NSMutableString stringWithFormat:@"%@"\n--- signal %d after exception ---\n%@",old?old:@"",sig,report];
+  }
   GSCrashReportToPasteboard(report);
   GSSignalDepth=0;
  }
