@@ -31,7 +31,7 @@ static NSUInteger GSMenuItems(id object,SEL selector,id controller,NSUInteger se
 NSUInteger n=GSSections(object,NSSelectorFromString(@"numberOfCustomSectionsForAccountMenuViewController:"),controller);
 if(n==0)return section==0?1:GSItems(object,selector,controller,section);
 if(section==n-1)return GSItems(object,selector,controller,section)+1;return GSItems(object,selector,controller,section);}
-return GSItems(object,selector,controller,section);}
+
 static BOOL GSOwnItem(id object,id controller,NSIndexPath *path){
 NSUInteger n=GSSection(object,controller);
 if(n==0)return path.section==0&&path.row==0;
