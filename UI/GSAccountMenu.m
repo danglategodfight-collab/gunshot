@@ -1,3 +1,5 @@
+
+
 #import "../Shared/GSPhotosCompatibility.h"
 #import "../Shared/GSLocalization.h"
 #import "GSAccountMenu.h"
@@ -16,6 +18,7 @@ void GSMarkHit(const char *m);
 #else
 #define GSMARK(m) do{}while(0)
 #endif
+
 
 // Private declarations are version/ABI checked before any hook is installed.
 @interface NSObject (GSMenuItemConstruction)
@@ -38,7 +41,8 @@ static NSUInteger GSMenuItems(id object,SEL selector,id controller,NSUInteger se
 #ifdef GS_JAILED
  GSReinstallCrashCatcher();
 #endif
- return section==GSSection(object,controller)?1:GSItems(object,selector,controller,section);}
+ // DIAG v6: 2 items in our section — tests whether Google's accessory injector does objectAtIndex:1 on a single-item section.
+ return section==GSSection(object,controller)?2:GSItems(object,selector,controller,section);}
 static BOOL GSOwnItem(id object,id controller,NSIndexPath *path){return path.section==GSSection(object,controller)&&path.row==0;}
 
 
@@ -116,4 +120,3 @@ void GSInstallAccountMenu(void){
  Method action=class_getInstanceMethod(handler,NSSelectorFromString(@"performCustomActionType:indexPath:accountMenuViewController:"));
  if(action&&!strcmp(method_getTypeEncoding(action),"v40@0:8q16@24@32"))GSUIAction=(void *)method_setImplementation(action,(IMP)GSMenuUIAction);
  installed=YES;GSInstallNativeAccount();
-}
